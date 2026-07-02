@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linear Group — GPU inference systems research</title>
+<meta name="description" content="Independent research on low-level systems and GPU inference: KV cache, quantization, RDMA/disaggregation, kernel-level performance. By John Rose">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>
+  // both modes available; dark is the default, ?theme=light for light
+  var t = new URLSearchParams(location.search).get("theme");
+  document.documentElement.setAttribute("data-theme",
+    t === "light" ? "light" : "dark");
+</script>
+</head>
+<body>
+<div class="wrap">
+
+<header class="site">
+  <!-- roofline mark: rising slope, ridge point, flat ceiling -->
+  <svg class="mark" width="34" height="24" viewBox="0 0 34 24" aria-hidden="true">
+    <polyline points="2,21 17,6 32,6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="17" cy="6" r="2.8" fill="#C81F2E"/>
+  </svg>
+  <a class="wordmark" href="/">Linear Group</a>
+  <span class="sub">systems research</span>
+</header>
+
+<section class="intro">
+  <h1>Inference, systems, and chips</h1>
+  <p>Research notes on low-level systems and GPUs: KV cache management, quantization, PCIe, attention kernels, and disaggregated serving. Implementations, measurements, and implications.</p>
+  <p class="byline">John Rose — ex-IBM Linux kernel (author of <a href="https://github.com/torvalds/linux/blob/v6.18/drivers/pci/hotplug/rpadlpar_core.c">rpadlpar</a>, PCI hotplug driver for POWER; co-author <a href="https://github.com/ibm-power-utilities/librtas">librtas</a>) · <a href="https://github.com/jnros">github.com/jnros</a> · <a href="mailto:john@lineargp.com">email</a></p>
+</section>
+
+<section class="ledger">
+  <h2>Research notes</h2>
+  <ul class="notes">
+
+    <li>
+      <span class="date">2026-06</span>
+      <span class="title">
+        <a href="https://github.com/jnros/nanodev">DiffusionBlocks AR: first language-model port</a>
+        <span class="finding">Block-wise training with GPU decoupling.</span>
+        <span class="links"><a href="https://github.com/jnros/nanodev">code</a></span>
+      </span>
+    </li>
+
+    <li>
+      <span class="date">2026-05</span>
+      <span class="title">
+        <a href="https://github.com/jnros/roofbench">Roofline &amp; ridge point: GPU inference optimization</a>
+        <span class="finding">Decode, roofline, and ridge-point benchmarks; H100 characterization found &lt;30% of peak memory bandwidth utilized.</span>
+        <span class="links"><a href="https://github.com/jnros/roofbench">code</a></span>
+      </span>
+    </li>
+
+    <li>
+      <span class="date">2026-05</span>
+      <span class="title">
+        <a href="https://github.com/jnros/kvmix">KV Mix: asymmetric K/V quantization</a>
+        <span class="finding">Outlier-driven mixed precision; K and V tolerate different bit-widths.</span>
+        <span class="links"><a href="https://github.com/jnros/kvmix">code</a></span>
+      </span>
+    </li>
+
+    <li>
+      <span class="date">2026-04</span>
+      <span class="title">
+        <a href="https://gist.github.com/jnros/9d0743f02183ccb2947e8eb69bb9406c">DeepSeek V4: system design &amp; implications</a>
+        <span class="finding">Analysis of the methods and their systems impact.</span>
+        <span class="links"><a href="https://gist.github.com/jnros/9d0743f02183ccb2947e8eb69bb9406c">analysis</a></span>
+      </span>
+    </li>
+
+    <li>
+      <span class="date">2026-04</span>
+      <span class="title">
+        <a href="https://github.com/jnros/agent-isolation">Rootless agent sandbox from kernel primitives</a>
+        <span class="finding">Isolation composed from namespaces, Landlock, and seccomp — no root, no containers.</span>
+        <span class="links"><a href="https://github.com/jnros/agent-isolation">code</a></span>
+      </span>
+    </li>
+
+    <li>
+      <span class="date">2026-03</span>
+      <span class="title">
+        <a href="https://gist.github.com/jnros/0e3ad79e43762eb750d14c3a697543de">KV compression (TurboQuant): memory &amp; demand implications</a>
+        <span class="finding">What KV compression does to serving capacity per GPU.</span>
+        <span class="links"><a href="https://gist.github.com/jnros/0e3ad79e43762eb750d14c3a697543de">analysis</a></span>
+      </span>
+    </li>
+
+    <li>
+      <span class="date">2026-03</span>
+      <span class="title">
+        <a href="https://github.com/jnros/cuda-attn-ref">Paged attention: KV cache as virtual memory (CUDA)</a>
+        <span class="finding">From-scratch CUDA implementation treating KV cache as paged virtual memory.</span>
+        <span class="links"><a href="https://github.com/jnros/cuda-attn-ref">code</a></span>
+      </span>
+    </li>
+
+    <li>
+      <span class="date">2026-02</span>
+      <span class="title">
+        <a href="https://github.com/jnros/inf-bench">Decode attention: MHA / GQA / MQA</a>
+        <span class="finding">Benchmarked attention variants across memory- and compute-bound regimes.</span>
+        <span class="links"><a href="https://github.com/jnros/inf-bench">code</a></span>
+      </span>
+    </li>
+
+    <li>
+      <span class="date">2026-01</span>
+      <span class="title">
+        <a href="https://gist.github.com/jnros/b198b7b78120f972b84d4787e9eb9c57">Kimi K2.5: methods + systems impact</a>
+        <span class="finding">Analysis of training methods and inference-side consequences.</span>
+        <span class="links"><a href="https://gist.github.com/jnros/b198b7b78120f972b84d4787e9eb9c57">analysis</a></span>
+      </span>
+    </li>
+
+    <li>
+      <span class="date">2026-01</span>
+      <span class="title">
+        <a href="https://github.com/jnros/slice">FP64 on Blackwell INT8 tensor cores (Ozaki scheme): POC</a>
+        <span class="finding">Proof of concept for emulated double precision on INT8 hardware.</span>
+        <span class="links"><a href="https://github.com/jnros/slice">code</a> <a href="https://gist.github.com/jnros/c97b01bff9aa683069556e6e0b6ae073">analysis</a></span>
+      </span>
+    </li>
+
+    <li>
+      <span class="date">2026-01</span>
+      <span class="title">
+        <a href="https://gist.github.com/jnros/92ed1e5b5af05d3a2fd353b4537af744">KV offload (Engram): system design</a>
+        <span class="finding">Design for KV cache offload across memory tiers.</span>
+        <span class="links"><a href="https://gist.github.com/jnros/92ed1e5b5af05d3a2fd353b4537af744">analysis</a></span>
+      </span>
+    </li>
+
+  </ul>
+</section>
+
+<section class="prov">
+  <h2>Background</h2>
+  <p>Seven years in Linux kernel at IBM: architected I/O virtualization for POWER (<a href="https://github.com/torvalds/linux/blob/v6.18/drivers/pci/hotplug/rpadlpar_core.c">rpadlpar</a>, still in mainline), created <a href="https://github.com/ibm-power-utilities/librtas">librtas</a>, led the international virtualization team, upstreamed across 12 kernel releases. Fifteen years of technology strategy and capital allocation at AT&amp;T. Now building inference, GPU, and low-level systems full time.</p>
+</section>
+
+<footer class="site">
+  <span>© 2026 Linear Group LLC</span>
+  <span><a href="https://github.com/jnros">github</a> · <a href="https://www.linkedin.com/in/johnrose/">linkedin</a> · <a href="mailto:john@lineargp.com">john@lineargp.com</a></span>
+</footer>
+
+</div>
+</body>
+</html>
