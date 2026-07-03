@@ -31,11 +31,11 @@
 <article class="note">
 
 <h1>RDMA over Ethernet (RoCE) for Disaggregated Inference</h1>
-<p class="meta">2026-07 · John Rose · <a href="mailto:john@lineargp.com">john@lineargp.com</a> · code: <a href="https://github.com/jnros">github.com/jnros</a></p>
+<p class="meta">2026-07 · John Rose · <a href="mailto:john@lineargp.com">john@lineargp.com</a> · code: <a href="https://github.com/jnros/kvwire">github.com/jnros/kvwire</a></p>
 
 <h2>Motivation</h2>
 <p>Modern inference providers use disaggregation to separate prefill and decode onto separate nodes. After the prefill server computes the KV cache, it typically uses RDMA over high-speed network fabric to push tensors to the decode node.</p>
-<p>I built a Linux tool from scratch in C to get first-hand numbers on design tradeoffs between memory and network. Is it more efficient to chunk the KV cache and offload it in tiny pieces, or move the whole thing at once? If we parallelize the prefill compute and network move, how much can we speed up the entire process? These design choices affect both bandwidth efficiency and Time to First Token on the decode side.</p>
+<p>I built a Linux tool from scratch in C <a href="https://github.com/jnros/kvwire">(kvwire)</a> to get first-hand numbers on design tradeoffs between memory and network. Is it more efficient to chunk the KV cache and offload it in tiny pieces, or move the whole thing at once? If we parallelize the prefill compute and network move, how much can we speed up the entire process? These design choices affect both bandwidth efficiency and Time to First Token on the decode side.</p>
 <p>A prior project characterized the memory and compute tradeoffs (see <a href="https://github.com/jnros/roofbench">roofbench</a>, GPU roofline and ridge point); this one describes the data plane of disaggregated prefill/decode across compute and network axes.</p>
 
 <h2>Setup</h2>
