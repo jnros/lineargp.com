@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RDMA over Ethernet (RoCE) for Disaggregated Inference — Linear Group</title>
+<meta name="description" content="Moving a Qwen KV cache over RDMA/RoCE for disaggregated prefill/decode.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<script>
+  // both modes available; dark is the default, ?theme=light for light
+  var t = new URLSearchParams(location.search).get("theme");
+  document.documentElement.setAttribute("data-theme",
+    t === "light" ? "light" : "dark");
+</script>
+</head>
+<body>
+<div class="wrap">
+
+<header class="site">
+  <svg class="mark" width="34" height="24" viewBox="0 0 34 24" aria-hidden="true">
+    <polyline points="2,21 17,6 32,6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="17" cy="6" r="2.8" fill="#C81F2E"/>
+  </svg>
+  <a class="wordmark" href="/">Linear Group</a>
+  <span class="sub">systems research</span>
+</header>
+
+<article class="note">
+
+<h1>RDMA over Ethernet (RoCE) for Disaggregated Inference</h1>
+<p class="meta">2026-07 · John Rose · <a href="mailto:john@lineargp.com">john@lineargp.com</a> · code: <a href="https://github.com/jnros">github.com/jnros</a></p>
+
+<h2>Motivation</h2>
+<p>Modern inference providers use disaggregation to separate prefill and decode onto separate nodes. After the prefill server computes the KV cache, it typically uses RDMA over high-speed network fabric to push tensors to the decode node.</p>
+<p>I built a Linux tool from scratch in C to get first-hand numbers on design tradeoffs between memory and network. Is it more efficient to chunk the KV cache and offload it in tiny pieces, or move the whole thing at once? If we parallelize the prefill compute and network move, how much can we speed up the entire process? These design choices affect both bandwidth efficiency and Time to First Token on the decode side.</p>
+<p>A prior project characterized the memory and compute tradeoffs (see <a href="https://github.com/jnros/roofbench">roofbench</a>, GPU roofline and ridge point); this one describes the data plane of disaggregated prefill/decode across compute and network axes.</p>
+
+<h2>Setup</h2>
+<p>I used two Linux servers with gigabit Ethernet and Soft-RoCE (<code>rdma_rxe</code> kernel driver) bound to the physical interfaces. Verbs in C allow for TCP bootstrap (QPN / rkey / GID), queue pair through INIT → RTR → RTS, and one-sided RDMA WRITE. The payload: Qwen KV cache tensors — 24 layers @ fp16, 4,096 tokens, 2 attention heads, and 64 dimensions. Total 48&nbsp;MB of data, extracted in a prior project (<a href="https://github.com/jnros/kvmix">kvmix</a>, KV-cache mixed-precision quantization).</p>
+<p>Because <code>rdma_rxe</code> runs the RoCE protocol in software over the kernel network stack, absolute numbers here are limited by protocol overhead rather than fabric behavior. A shift from Soft-RoCE to an RNIC and network fabric changes the limits, but the shape of the chunking curve, the verbs programming model, and the overlap math stay the same.</p>
+
+<h2>Implementation notes</h2>
+<p><strong>Memlock.</strong> Default Linux settings limit pinned memory to 8&nbsp;MiB. RDMA requires large buffers that can't be paged out. In ibverbs this manifests as an <code>ibv_reg_mr()</code> failure for memory alloc on pd/cq/mr. Fix: adjust systemd <code>DefaultLimitMEMLOCK</code> and/or <code>limits.conf</code> to 256&nbsp;MiB. Verify with <code>ulimit -l</code>.</p>
+<p><strong>RNR infinite hang.</strong> RDMA uses <code>WRITE_WITH_IMM</code>, which consumes a recv on the responder's RQ. If the responder has not yet posted a recv, error RNR NAK (receiver not ready). <code>rnr_retry=7</code> is the "retry forever" value, so the client retries forever, no error surfaced, hang. Fix: for both sender and receiver, pre-post a recv before either side issues an IMM.</p>
+<p><strong>QP state machine.</strong> RESET → INIT → RTR → RTS via <code>ibv_modify_qp</code>. If the attr mask isn't perfect and the modify no-ops the transition, there's no error, but connect fails.</p>
+<p><strong>GID / RoCE v2.</strong> IB tutorials use addressing by LID + <code>is_global=0</code>. Paste that into rxe and it won't connect. RoCE has no subnet manager and no LID; it addresses by GID. Fix: pick v2 in the port's GID table, set <code>is_global=1</code>, and fill the GRH with the remote GID. Verify with <code>ibv_devinfo -v</code>.</p>
+<p><strong>PCIe probe: no bus for rxe.</strong> <code>--probe</code> reads the NIC's PCIe link from sysfs (speed / width / BDF / NUMA) and computes a DMA payload max. But rxe is a software device with no PCIe function. Fix: hop rxe0 → parent → netdev → <code>/sys/class/net/&lt;nd&gt;/device</code>.</p>
+
+<h2>Experiment 1: data chunking during RDMA</h2>
+<p>I test RDMA WRITE of the 48&nbsp;MB cache at four granularities:</p>
+<pre><code>per-token-per-layer   1 tok × 2 heads × 64 d × 2 (K&amp;V)  =    512 B
+per-token-all-layers                                     =   12 KB
+per-layer                                                =    2 MB
+whole cache                                              =   48 MB</code></pre>
+
+<figure>
+  <a href="out_latbw.png" target="_blank" rel="noopener">
+    <img src="out_latbw.png" alt="Latency (p50/p99/p999) and achieved bandwidth versus message size over Soft-RoCE, with markers for per-token-per-layer, per-token-all-layers, per-layer, and whole-cache granularities.">
+  </a>
+  <figcaption>Latency (left) and effective bandwidth (right) across the sweep. Dashed lines: the four granularities.</figcaption>
+</figure>
+
+<p><strong>Latency.</strong> The p50 floor is ~85&nbsp;µs. This is the rxe and software-stack cost. p50 and p99 converge at large message sizes as transfers become bandwidth-dominated. The p999 spikes at small sizes are likely scheduling jitter, since rxe rides the kernel network stack. On production hardware, that tail is the concern for per-token streaming.</p>
+
+<p><strong>Bandwidth.</strong> The knee lands around 2<sup>13</sup> bytes (~8&nbsp;K), so the smallest natural streaming unit (per-token-all-layers granularity, 12&nbsp;K) sits just past it, on the saturated shelf. Below the knee, per-WQE posting and overhead dominate every byte. Above it, the wire dominates and throughput saturates at ~0.93&nbsp;Gbit/s, the practical ceiling of the GbE link reached through the RDMA stack.</p>
+
+<p><strong>Takeaway:</strong> Minimum viable granularity for streaming KV during prefill is a full token's KV across all layers (12&nbsp;KB). Larger chunks delay the TTFT without adding much bandwidth. On this link, 12&nbsp;KB is the goldilocks chunking size for disaggregated inference.</p>
+
+<h2>Experiment 2: overlap transfer with compute</h2>
+<p>Prefill builds KV by layer, which is then sequentially offloaded in the naive case. To further increase utilization, I overlap prefill and offload: transfer layer <em>N</em> while computing layer <em>N+1</em>. Split the RDMA buffer into A and B:</p>
+<ul>
+  <li>Producer (prefill compute, emulated here) fills buffer A for chunk <em>N+1</em></li>
+  <li>NIC sends chunk <em>N</em> from buffer B</li>
+  <li>Then swap buffers for the next layer</li>
+</ul>
+<p>This is similar to GPU pipelines with ping-pong staging buffers. Time per stage goes from T<sub>c</sub>&nbsp;+&nbsp;T<sub>x</sub> (sequential) to max(T<sub>c</sub>,&nbsp;T<sub>x</sub>). Classic two-stage pipeline math.</p>
+
+<figure>
+  <a href="out_overlap.png" target="_blank" rel="noopener">
+    <img src="out_overlap.png" alt="Overlap speedup versus compute/transfer ratio, peaking at 1.92x at Tc equals Tx, with network-bound and compute-bound regimes shaded.">
+  </a>
+  <figcaption>Overlap speedup vs T<sub>c</sub>/T<sub>x</sub>. Peak 1.92× of theoretical 2.0 at the balance point.</figcaption>
+</figure>
+
+<figure>
+  <a href="out_effbw.png" target="_blank" rel="noopener">
+    <img src="out_effbw.png" alt="Effective bandwidth for overlapped versus sequential transfer across the compute/transfer ratio sweep.">
+  </a>
+  <figcaption>Effective bandwidth (wall clock ÷ data moved), overlapped vs sequential baseline.</figcaption>
+</figure>
+
+<p>Both limits behave according to the math. As T<sub>c</sub>&nbsp;→&nbsp;0 (left side), the wire is the whole story and overlap can't help. As T<sub>c</sub>&nbsp;→&nbsp;∞ (right side), the transfer hides entirely under compute and speedup decays to 1. The overlap peak sits at T<sub>c</sub>&nbsp;=&nbsp;T<sub>x</sub>.</p>
+
+<p>The ridge point is useful as a diagnostic rather than a target. Every disaggregated inference deployment, big frontier lab or small Mac cluster, falls somewhere on this curve. If network-bound (left side), kernel optimization is wasted effort. If compute-bound (right side), a network upgrade is setting money on fire. Same role as the roofline ridge point, in that it classifies bottlenecks.</p>
+
+<h2>Limitations</h2>
+<p>I built and ran these tools over standard Ethernet NICs and Soft-RoCE, in which the Linux kernel provides CPU-mediated RDMA. A shift up to RNICs and high speed would drop the latency floor and remove the CPU from the data path. The small-chunk overhead knee moves left, as the per-WQE costs are lower but nonzero. Production inference deployments use lossless Ethernet, where congestion control and buffer management are key challenges.</p>
+
+<div class="implications">
+<h2>Implications</h2>
+<p>Granularity selection for the KV cache in disaggregated inference presents tradeoffs. Per-token streaming gives the decode node a quick response but with a bandwidth-utilization penalty. Serving systems with TTFT SLOs may happily pay this cost.</p>
+
+<p>The ridge-point framing gives an infrastructure team a straight answer to "should we buy network or optimize kernels?" KV compression (see <a href="https://github.com/jnros/kvmix">kvmix</a>) and this KV transport problem can be viewed as the same optimization from opposite ends.</p>
+</div>
+
+</article>
+
+<footer class="site">
+  <span>© 2026 Linear Group LLC</span>
+  <span><a href="https://github.com/jnros">github</a> · <a href="https://www.linkedin.com/in/johnrose/">linkedin</a> · <a href="mailto:john@lineargp.com">john@lineargp.com</a></span>
+</footer>
+
+</div>
+</body>
+</html>
