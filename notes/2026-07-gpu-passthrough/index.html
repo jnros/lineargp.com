@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU Passthrough: VFIO, IOMMU, and a Thermal Bug — Linear Group</title>
+<meta name="description" content="Passing an NVIDIA RTX 4070 Ti SUPER through to a KVM guest on an AMD host, headless, start to finish.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<script>
+  // both modes available; dark is the default, ?theme=light for light
+  var t = new URLSearchParams(location.search).get("theme");
+  document.documentElement.setAttribute("data-theme",
+    t === "light" ? "light" : "dark");
+</script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-K394KQK3GS"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-K394KQK3GS');
+</script>
+</head>
+<body>
+<div class="wrap">
+
+<header class="site">
+  <svg class="mark" width="34" height="24" viewBox="0 0 34 24" aria-hidden="true">
+    <polyline points="2,21 17,6 32,6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="17" cy="6" r="2.8" fill="#C81F2E"/>
+  </svg>
+  <a class="wordmark" href="/">Linear Group</a>
+  <span class="sub">systems research</span>
+</header>
+
+<article class="note">
+
+<h1>GPU Passthrough: VFIO, IOMMU, and a Thermal Bug</h1>
+<p class="meta">2026-07 · John Rose · <a href="mailto:john@lineargp.com">john@lineargp.com</a> · code: <a href="https://github.com/jnros">github.com/jnros</a></p>
+
+<p>Full build log: passing an NVIDIA RTX 4070 Ti SUPER through to a KVM guest on an AMD host, headless, start to finish. Part 6 describes my first brush with thermal calamity.</p>
+
+<p>Result: The host claims both NVIDIA PCI functions with vfio-pci; the Ubuntu guest sees the physical RTX 4070 Ti SUPER, loads the open NVIDIA driver, and runs CUDA.</p>
+
+<figure>
+  <a href="host_guest_gpu.png" target="_blank" rel="noopener">
+    <img src="host_guest_gpu.png" alt="Two terminals side by side. Left, labelled HOST: lspci -s 07: -v shows the NVIDIA AD103 RTX 4070 Ti SUPER at 07:00.0 and its audio function at 07:00.1, both with 'Kernel driver in use: vfio-pci', both in IOMMU group 2. Right, labelled VM_GUEST: nvidia-smi reports driver 595.84, CUDA 13.2, one GeForce RTX 4070 at 09:00.0, 2MiB of 16376MiB used, no running processes.">
+  </a>
+  <figcaption>Both halves of the handoff: host on <code>vfio-pci</code>, guest driving the card.</figcaption>
+</figure>
+
+<p><strong>Tested on:</strong> AMD (ASUS board), Ubuntu Server 24.04 host (kernel 6.8.0-134), Ubuntu Server 24.04 guest (kernel 6.8.0-136), NVIDIA [RTX 4070 Ti SUPER], driver 595.84.</p>
+
+<h2 id="before">0. Before you start</h2>
+<p>Two checks that will save you a weekend:</p>
+<ul>
+  <li><strong>IOMMU groups.</strong> The GPU must sit in a group you can hand over whole. Check this before buying hardware.</li>
+  <li><strong>RMRR reservations.</strong> If firmware has reserved a memory region covering the GPU, DMA mappings will never succeed and no amount of config will fix it. Watch for <code>DMAR</code> and <code>RMRR</code> in <code>dmesg</code>. Consumer laptops are especially prone to this.</li>
+</ul>
+<p>General guidance: AMD boards are friendlier than Intel for this. Older GPUs are friendlier than new ones. And disable the GUI on the host. Better yet, don't even install NVIDIA drivers on the host.</p>
+
+<h2>1. BIOS</h2>
+<p><strong>SVM Mode</strong> — enable. <strong>IOMMU / AMD-Vi</strong> — set to <em>enable</em>, not <em>auto</em>. <strong>CSM</strong> — enable.</p>
+
+<h2>2. Host: enable IOMMU</h2>
+<p>Add kernel boot arguments in GRUB:</p>
+<pre><code>amd_iommu=on iommu=pt</code></pre>
+<p>Update grub, reboot, verify:</p>
+<pre><code>sudo dmesg | grep -i -E "iommu|dmar"
+ls /sys/kernel/iommu_groups</code></pre>
+<p>If <code>/sys/kernel/iommu_groups</code> is populated, IOMMU is live.</p>
+
+<h2 id="groups">3. Host: identify the device and its group</h2>
+<p>Walk the sysfs tree to map groups to devices. The GPU must be isolated in its group — a group containing the GPU plus a NIC or system-level device cannot be passed through.</p>
+
+<figure>
+  <a href="iommu_groups.png" target="_blank" rel="noopener">
+    <img src="iommu_groups.png" alt="Terminal output of a script walking /sys/kernel/iommu_groups, listing devices per IOMMU group. Group 2 is outlined in green: it contains only the NVIDIA AD103 VGA controller and its companion audio function, plus two bridges.">
+  </a>
+  <figcaption>IOMMU group 2 (boxed) holds the GPU and its audio function, nothing else.</figcaption>
+</figure>
+
+<pre><code>+- [0000:00:03.0] Host bridge [0600]: AMD Starship/Matisse PCIe Dummy Host Bridge [1022:1482]
+  +- [0000:00:03.1] PCI bridge [0604]: AMD Starship/Matisse GPP Bridge [1022:1483]
+  +- [0000:07:00.0] VGA compatible controller [0300]: NVIDIA AD103 [GeForce RTX 4070 Ti SUPER] [10de:2705] (rev a1)
+  \- [0000:07:00.1] Audio device [0403]: NVIDIA Device [10de:22bb] (rev a1)</code></pre>
+
+<p>Two NVIDIA functions (VGA + companion audio) = one card, and both must be passed. The host bridge and PCI bridge entries can be safely ignored. <strong>Record the <code>vendor:device</code> hex pairs</strong> — here <code>10de:2705</code> and <code>10de:22bb</code>. VFIO needs them.</p>
+
+<h2>4. Host: drop to text mode</h2>
+<pre><code>sudo systemctl set-default multi-user.target
+sudo reboot</code></pre>
+<p>To restore the GUI later: <code>sudo systemctl set-default graphical.target</code>.</p>
+
+<h2 id="vfio">5. Host: bind vfio-pci</h2>
+<p><code>/etc/modprobe.d/vfio.conf</code>:</p>
+<pre><code>options vfio-pci ids=10de:2705,10de:22bb</code></pre>
+<p><code>/etc/modprobe.d/blacklist-nouveau.conf</code>:</p>
+<pre><code>blacklist nouveau
+options nouveau modeset=0</code></pre>
+<p><code>/etc/initramfs-tools/modules</code> — append:</p>
+<pre><code>vfio
+vfio_iommu_type1
+vfio_pci
+vfio_virqfd</code></pre>
+<p>Rebuild and reboot:</p>
+<pre><code>sudo update-initramfs -u -k all
+sudo reboot</code></pre>
+<p>If your console is a monitor attached to that GPU, <strong>the display will go dark partway through boot. This is expected.</strong> Last visible line is typically <code>VFIO - User Level meta-driver version: 0.3</code>. Reconnect over SSH and verify:</p>
+<pre><code>$ lspci -k -s 07:00.0
+07:00.0 VGA compatible controller: NVIDIA AD103 [GeForce RTX 4070 Ti SUPER] (rev a1)
+        Subsystem: Gigabyte Technology Co., Ltd Device 413c
+        Kernel driver in use: vfio-pci</code></pre>
+<p><code>Kernel driver in use: vfio-pci</code> is the goal state.</p>
+
+<h2 id="thermal">6. Host: the thermal bug</h2>
+<p><strong>Symptom.</strong> Immediately after enabling VFIO: fan much louder, CPU ~74&nbsp;°C at idle. Nothing in <code>dmesg</code> or <code>journalctl</code>.</p>
+<p><strong>Ruled out.</strong> Cooler mounting (BIOS temps stable). Governor / frequency scaling. Interrupt storm. CPU stuck at boost.</p>
+<p><strong>Clue.</strong> <code>systemd-udevd</code> conspicuously busy on an idle headless server; <code>kworker</code> threads waking constantly.</p>
+<p><strong>Smoking gun.</strong></p>
+<pre><code>$ sudo udevadm monitor --kernel --udev
+add    nvidia
+remove nvidia
+add    nvidia
+remove nvidia
+...</code></pre>
+<p>~10 times per second, indefinitely.</p>
+<p><strong>Proof.</strong> <code>sudo udevadm control --stop-exec-queue</code> → CPU 74&nbsp;°C to 35–45&nbsp;°C instantly. Fan quiet.</p>
+<p><strong>Cause.</strong> VFIO binding was correct throughout. Leftover Ubuntu/NVIDIA desktop automation was repeatedly attempting to initialize a GPU that VFIO had already claimed.</p>
+<p><strong>Fix.</strong></p>
+<pre><code>sudo ln -sf /dev/null /etc/udev/rules.d/71-nvidia.rules
+sudo systemctl mask --now nvidia-persistenced.service
+sudo systemctl mask --now gpu-manager.service
+
+sudo tee /etc/modprobe.d/vfio-blacklist-nvidia.conf &gt;/dev/null &lt;&lt;'EOF'
+blacklist nvidia
+blacklist nvidia_drm
+blacklist nvidia_modeset
+blacklist nvidia_uvm
+blacklist nvidia_peermem
+blacklist nouveau
+blacklist nvidiafb
+EOF
+
+sudo update-initramfs -u
+sudo udevadm control --reload-rules
+sudo udevadm control --start-exec-queue</code></pre>
+<p>Confirm with <code>udevadm monitor</code> — it should stay silent.</p>
+
+<h2>7. Host: KVM and libvirt</h2>
+<pre><code>sudo apt install \
+    qemu-kvm \
+    libvirt-daemon-system \
+    libvirt-clients \
+    virtinst \
+    bridge-utils \
+    ovmf \
+    cpu-checker
+
+kvm-ok
+sudo systemctl enable --now libvirtd
+
+sudo usermod -aG libvirt $USER
+sudo usermod -aG kvm $USER</code></pre>
+<p>Log out, log back in, then verify with <code>virsh list --all</code>. An empty table (rather than a permissions error) is success.</p>
+
+<h2>8. Guest: headless install over serial</h2>
+<pre><code>sudo virt-install \
+  --name labvm \
+  --memory 8192 \
+  --vcpus 4 \
+  --disk size=20,bus=virtio,format=qcow2 \
+  --location "/home/jnros/iso/ubuntu-24.04.4-live-server-amd64.iso,kernel=casper/vmlinuz,initrd=casper/initrd" \
+  --os-variant ubuntu24.04 \
+  --network network=default,model=virtio \
+  --boot uefi \
+  --graphics none \
+  --console pty,target_type=serial \
+  --extra-args "console=tty0 console=ttyS0,115200n8"</code></pre>
+<p>When the terminal fills with kernel boot messages, the install is running. Minimal install + OpenSSH is sufficient.</p>
+
+<figure>
+  <a href="guest_install.png" target="_blank" rel="noopener">
+    <img src="guest_install.png" alt="Ubuntu Server installer welcome screen rendered over a serial console inside the KVM guest.">
+  </a>
+  <figcaption>The Ubuntu Server installer, over serial, with no graphics device at all.</figcaption>
+</figure>
+
+<p>Post-install, inside the guest:</p>
+<pre><code>ip a
+ping -c3 google.com
+sudo apt install qemu-guest-agent
+sudo systemctl enable --now qemu-guest-agent</code></pre>
+<p>Confirm you can SSH to the guest from the host before continuing.</p>
+
+<h2 id="attach">9. Guest: attach the GPU</h2>
+<p><strong>Secure Boot caveat.</strong> <code>--boot uefi</code> enables Secure Boot by default, which complicates NVIDIA passthrough. Remove it from the domain XML.</p>
+<p>Add both functions as <code>hostdev</code> entries — you pass the group, not the device:</p>
+<pre><code>&lt;!-- GPU passthrough --&gt;
+&lt;hostdev mode='subsystem' type='pci' managed='yes'&gt;
+  &lt;driver name='vfio'/&gt;
+  &lt;source&gt;
+    &lt;address domain='0x0000' bus='0x07' slot='0x00' function='0x0'/&gt;
+  &lt;/source&gt;
+&lt;/hostdev&gt;
+&lt;hostdev mode='subsystem' type='pci' managed='yes'&gt;
+  &lt;driver name='vfio'/&gt;
+  &lt;source&gt;
+    &lt;address domain='0x0000' bus='0x07' slot='0x00' function='0x1'/&gt;
+  &lt;/source&gt;
+&lt;/hostdev&gt;</code></pre>
+<p>On boot, the guest kernel arbitrates over a non-emulated card:</p>
+<pre><code>[    0.930357] pci 0000:08:01.0: vgaarb: setting as boot VGA device
+[    0.933718] pci 0000:09:00.0: vgaarb: bridge control possible
+[    0.934690] pci 0000:09:00.0: vgaarb: VGA device added: decodes=io+mem,owns=none,locks=none</code></pre>
+<p>Note the address change: <code>07:00.0</code> on the host, <code>09:00.0</code> in the guest — the guest has its own PCI hierarchy.</p>
+
+<h2>10. Guest: NVIDIA driver</h2>
+<p>Blacklist nouveau inside the guest first:</p>
+<pre><code>cat &lt;&lt;EOF | sudo tee /etc/modprobe.d/blacklist-nouveau.conf
+blacklist nouveau
+options nouveau modeset=0
+EOF
+
+sudo update-initramfs -u
+sudo reboot</code></pre>
+<p>Then:</p>
+<pre><code>sudo apt update
+sudo ubuntu-drivers devices     # recommended: nvidia-driver-595-open
+sudo apt install nvidia-driver-595-open
+sudo reboot</code></pre>
+<p>Result:</p>
+<pre><code>$ nvidia-smi
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.84                 Driver Version: 595.84         CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070 ...    Off |   00000000:09:00.0 Off |                  N/A |
+|  0%   38C    P8              6W /  285W |       2MiB /  16376MiB |      0%      Default |
++-----------------------------------------+------------------------+----------------------+</code></pre>
+<p>And <code>lspci -vv -s 09:00.0</code> inside the guest reports <code>Kernel driver in use: nvidia</code>, full BARs (16&nbsp;MB / 256&nbsp;MB / 32&nbsp;MB), FLReset+, and AER capability — a real device, not an emulated one.</p>
+<p><strong>Note on link speed.</strong> Idle output shows <code>LnkSta: Speed 2.5GT/s (downgraded), Width x16</code> against a 16&nbsp;GT/s <code>LnkCap</code>. This is a low-power link state on an idle card, not a passthrough defect; it trains up under load.</p>
+
+<h2>Troubleshooting quick reference</h2>
+<table>
+  <thead>
+    <tr><th scope="col">Symptom</th><th scope="col">Likely cause</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Display goes dark during host boot</td>
+      <td>Expected once <code>vfio-pci</code> claims the GPU. Use SSH. <a href="#vfio">part 5</a></td>
+    </tr>
+    <tr>
+      <td>Host fan loud / high idle temp after VFIO</td>
+      <td>udev/NVIDIA claim loop. <a href="#thermal">part 6</a></td>
+    </tr>
+    <tr>
+      <td><code>Kernel driver in use: nouveau</code> after reboot</td>
+      <td>Blacklist not applied, or initramfs not rebuilt.</td>
+    </tr>
+    <tr>
+      <td>Kernel hangs on reboot</td>
+      <td>Fall back to a known-good boot entry; check <code>dmesg</code> / <code>journalctl</code>.</td>
+    </tr>
+    <tr>
+      <td>GPU visible but DMA failures</td>
+      <td>Check for <code>RMRR</code> / <code>DMAR</code> reservations — may be unfixable on that hardware. <a href="#before">part 0</a></td>
+    </tr>
+    <tr>
+      <td>Guest won't load NVIDIA driver</td>
+      <td>Secure Boot still enabled in the domain XML. <a href="#attach">part 9</a></td>
+    </tr>
+    <tr>
+      <td>IOMMU group contains unrelated devices</td>
+      <td>Platform limitation; try a different slot or board. <a href="#groups">part 3</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<figure>
+  <a href="kvm_lab.png" target="_blank" rel="noopener">
+    <img src="kvm_lab.png" alt="Four QEMU/KVM console windows on one desktop with virt-manager behind them. Top left is gpuvm, logged in, running nvidia-smi: driver 595.84, CUDA 13.2, one GeForce RTX 4070 at 09:00.0, idle. The other three windows are labvm, labvm2 and labvm3 showing ordinary systemd boot logs. virt-manager lists all four as Running.">
+  </a>
+  <figcaption>Four guests on one host: gpuvm with the passed-through card, three ordinary VMs alongside.</figcaption>
+</figure>
+
+</article>
+
+<footer class="site">
+  <span>© 2026 Linear Group LLC</span>
+  <span><a href="https://github.com/jnros">github</a> · <a href="https://www.linkedin.com/in/johnrose/">linkedin</a> · <a href="mailto:john@lineargp.com">john@lineargp.com</a></span>
+</footer>
+
+</div>
+</body>
+</html>

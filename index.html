@@ -15,7 +15,6 @@
   document.documentElement.setAttribute("data-theme",
     t === "light" ? "light" : "dark");
 </script>
-</head>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-K394KQK3GS"></script>
 <script>
@@ -25,6 +24,7 @@
 
   gtag('config', 'G-K394KQK3GS');
 </script>
+</head>
 <body>
 <div class="wrap">
 
@@ -40,13 +40,23 @@
 
 <section class="intro">
   <h1>Inference, systems, and chips</h1>
-  <p>Research notes on low-level systems and GPUs: KV cache management, quantization, PCIe, attention kernels, and disaggregated serving. Implementations, measurements, and implications.</p>
+  <p>Research notes on low-level systems and GPUs: KV cache management, quantization, PCIe, virtualization, attention kernels, and disaggregated serving. Implementations, measurements, and implications.</p>
   <p class="byline">John Rose — ex-IBM Linux kernel (author of <a href="https://github.com/torvalds/linux/blob/v6.18/drivers/pci/hotplug/rpadlpar_core.c">rpadlpar</a>, PCI hotplug driver for POWER; co-author <a href="https://github.com/ibm-power-utilities/librtas">librtas</a>) · <a href="https://github.com/jnros">github.com/jnros</a> · <a href="mailto:john@lineargp.com">email</a></p>
 </section>
 
 <section class="ledger">
   <h2>Research notes</h2>
   <ul class="notes">
+
+    <li>
+      <span class="date">2026-07</span>
+      <span class="title">
+        <a href="notes/2026-07-gpu-passthrough/">GPU passthrough: VFIO, IOMMU, and a thermal bug</a>
+        <span class="finding">NVIDIA passthrough to a KVM guest on AMD. ~30&nbsp;°C thermal spike from GPU driver contention (resolved). Build steps and mitigations.
+	</span>
+        <span class="links"><a href="notes/2026-07-gpu-passthrough/">guide</a></span>
+      </span>
+    </li>
 
     <li>
       <span class="date">2026-07</span>
