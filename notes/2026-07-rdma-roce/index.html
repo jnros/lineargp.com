@@ -67,7 +67,7 @@ whole cache                                              =   48 MB</code></pre>
 
 <figure>
   <a href="out_latbw.png" target="_blank" rel="noopener">
-    <img src="out_latbw.png" alt="Latency (p50/p99/p999) and achieved bandwidth versus message size over Soft-RoCE, with markers for per-token-per-layer, per-token-all-layers, per-layer, and whole-cache granularities.">
+    <img src="out_latbw.png" alt="latency/bandwidth">
   </a>
   <figcaption>Latency (left) and effective bandwidth (right) across the sweep. Dashed lines: the four granularities.</figcaption>
 </figure>
@@ -89,14 +89,14 @@ whole cache                                              =   48 MB</code></pre>
 
 <figure>
   <a href="out_overlap.png" target="_blank" rel="noopener">
-    <img src="out_overlap.png" alt="Overlap speedup versus compute/transfer ratio, peaking at 1.92x at Tc equals Tx, with network-bound and compute-bound regimes shaded.">
+    <img src="out_overlap.png" alt="overlap speedup">
   </a>
   <figcaption>Overlap speedup vs T<sub>c</sub>/T<sub>x</sub>. Peak 1.92× of theoretical 2.0 at the balance point.</figcaption>
 </figure>
 
 <figure>
   <a href="out_effbw.png" target="_blank" rel="noopener">
-    <img src="out_effbw.png" alt="Effective bandwidth for overlapped versus sequential transfer across the compute/transfer ratio sweep.">
+    <img src="out_effbw.png" alt="effective bandwidth">
   </a>
   <figcaption>Effective bandwidth (wall clock ÷ data moved), overlapped vs sequential baseline.</figcaption>
 </figure>

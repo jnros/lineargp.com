@@ -48,7 +48,7 @@
 
 <figure>
   <a href="host_guest_gpu.png" target="_blank" rel="noopener">
-    <img src="host_guest_gpu.png" alt="Two terminals side by side. Left, labelled HOST: lspci -s 07: -v shows the NVIDIA AD103 RTX 4070 Ti SUPER at 07:00.0 and its audio function at 07:00.1, both with 'Kernel driver in use: vfio-pci', both in IOMMU group 2. Right, labelled VM_GUEST: nvidia-smi reports driver 595.84, CUDA 13.2, one GeForce RTX 4070 at 09:00.0, 2MiB of 16376MiB used, no running processes.">
+    <img src="host_guest_gpu.png" alt="host/guest terminals">
   </a>
   <figcaption>Both halves of the handoff: host on <code>vfio-pci</code>, guest driving the card.</figcaption>
 </figure>
@@ -79,7 +79,7 @@ ls /sys/kernel/iommu_groups</code></pre>
 
 <figure>
   <a href="iommu_groups.png" target="_blank" rel="noopener">
-    <img src="iommu_groups.png" alt="Terminal output of a script walking /sys/kernel/iommu_groups, listing devices per IOMMU group. Group 2 is outlined in green: it contains only the NVIDIA AD103 VGA controller and its companion audio function, plus two bridges.">
+    <img src="iommu_groups.png" alt="IOMMU groups">
   </a>
   <figcaption>IOMMU group 2 (boxed) holds the GPU and its audio function, nothing else.</figcaption>
 </figure>
@@ -185,7 +185,7 @@ sudo usermod -aG kvm $USER</code></pre>
 
 <figure>
   <a href="guest_install.png" target="_blank" rel="noopener">
-    <img src="guest_install.png" alt="Ubuntu Server installer welcome screen rendered over a serial console inside the KVM guest.">
+    <img src="guest_install.png" alt="guest install">
   </a>
   <figcaption>The Ubuntu Server installer, over serial, with no graphics device at all.</figcaption>
 </figure>
@@ -285,7 +285,7 @@ sudo reboot</code></pre>
 
 <figure>
   <a href="kvm_lab.png" target="_blank" rel="noopener">
-    <img src="kvm_lab.png" alt="Four QEMU/KVM console windows on one desktop with virt-manager behind them. Top left is gpuvm, logged in, running nvidia-smi: driver 595.84, CUDA 13.2, one GeForce RTX 4070 at 09:00.0, idle. The other three windows are labvm, labvm2 and labvm3 showing ordinary systemd boot logs. virt-manager lists all four as Running.">
+    <img src="kvm_lab.png" alt="KVM lab">
   </a>
   <figcaption>One box, four virtual servers: gpuvm with the passed-through card, and three other Linux VMs.</figcaption>
 </figure>
