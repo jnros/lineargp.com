@@ -56,19 +56,24 @@
     <li>
       <span class="date">2026-07</span>
       <span class="title">
-        <a href="notes/2026-07-gpu-passthrough/">GPU passthrough: VFIO, IOMMU, and Thermal Debug</a>
-        <span class="finding">NVIDIA passthrough to a KVM guest on AMD. ~30&nbsp;°C thermal spike from GPU driver contention (resolved). Build steps and mitigations.
-	</span>
-        <span class="links"><a href="notes/2026-07-gpu-passthrough/">guide</a></span>
+        <a href="notes/2026-07-rdma-roce/">RDMA for Disaggregated Inference</a>
+        <span class="finding">RoCE implementation; KV cache transport and tradeoffs.</span>
+        <span class="links">
+          <a class="btn btn-writeup" href="notes/2026-07-rdma-roce/">writeup</a>
+          <a class="btn btn-repo" href="https://github.com/jnros/kvwire">repo</a>
+        </span>
       </span>
     </li>
 
     <li>
       <span class="date">2026-07</span>
       <span class="title">
-        <a href="notes/2026-07-rdma-roce/">RDMA for Disaggregated Inference</a>
-        <span class="finding">RoCE implementation; KV cache transport and tradeoffs.</span>
-        <span class="links"><a href="https://github.com/jnros/kvwire">code</a></span>
+        <a href="notes/2026-07-gpu-passthrough/">GPU passthrough: VFIO, IOMMU, and Thermal Debug</a>
+        <span class="finding">NVIDIA passthrough to a KVM guest on AMD. ~30&nbsp;°C thermal spike from GPU driver contention (resolved). Build steps and mitigations.
+	</span>
+        <span class="links">
+          <a class="btn btn-writeup" href="notes/2026-07-gpu-passthrough/">writeup</a>
+        </span>
       </span>
     </li>
 
@@ -77,7 +82,7 @@
       <span class="title">
         <a href="https://github.com/jnros/nanodev">DiffusionBlocks AR: first language-model port</a>
         <span class="finding">Block-wise training with GPU decoupling.</span>
-        <span class="links"><a href="https://github.com/jnros/nanodev">code</a></span>
+        <span class="links"><a class="btn btn-repo" href="https://github.com/jnros/nanodev">repo</a></span>
       </span>
     </li>
 
@@ -86,7 +91,7 @@
       <span class="title">
         <a href="https://github.com/jnros/roofbench">Roofline &amp; ridge point: GPU inference optimization</a>
         <span class="finding">Decode, roofline, and ridge-point benchmarks; H100 characterization found &lt;30% of peak memory bandwidth utilized.</span>
-        <span class="links"><a href="https://github.com/jnros/roofbench">code</a></span>
+        <span class="links"><a class="btn btn-repo" href="https://github.com/jnros/roofbench">repo</a></span>
       </span>
     </li>
 
@@ -95,7 +100,7 @@
       <span class="title">
         <a href="https://github.com/jnros/kvmix">KV Mix: asymmetric K/V quantization</a>
         <span class="finding">Outlier-driven mixed precision; K and V tolerate different bit-widths.</span>
-        <span class="links"><a href="https://github.com/jnros/kvmix">code</a></span>
+        <span class="links"><a class="btn btn-repo" href="https://github.com/jnros/kvmix">repo</a></span>
       </span>
     </li>
 
@@ -104,7 +109,7 @@
       <span class="title">
         <a href="https://gist.github.com/jnros/9d0743f02183ccb2947e8eb69bb9406c">DeepSeek V4: system design &amp; implications</a>
         <span class="finding">Analysis of the methods and their systems impact.</span>
-        <span class="links"><a href="https://gist.github.com/jnros/9d0743f02183ccb2947e8eb69bb9406c">analysis</a></span>
+        <span class="links"><a class="btn btn-repo" href="https://gist.github.com/jnros/9d0743f02183ccb2947e8eb69bb9406c">gist</a></span>
       </span>
     </li>
 
@@ -113,7 +118,7 @@
       <span class="title">
         <a href="https://github.com/jnros/agent-isolation">Rootless agent sandbox from kernel primitives</a>
         <span class="finding">Isolation composed from namespaces, Landlock, and seccomp — no root, no containers.</span>
-        <span class="links"><a href="https://github.com/jnros/agent-isolation">code</a></span>
+        <span class="links"><a class="btn btn-repo" href="https://github.com/jnros/agent-isolation">repo</a></span>
       </span>
     </li>
 
@@ -122,7 +127,7 @@
       <span class="title">
         <a href="https://gist.github.com/jnros/0e3ad79e43762eb750d14c3a697543de">KV compression (TurboQuant): memory &amp; demand implications</a>
         <span class="finding">What KV compression does to serving capacity per GPU.</span>
-        <span class="links"><a href="https://gist.github.com/jnros/0e3ad79e43762eb750d14c3a697543de">analysis</a></span>
+        <span class="links"><a class="btn btn-repo" href="https://gist.github.com/jnros/0e3ad79e43762eb750d14c3a697543de">gist</a></span>
       </span>
     </li>
 
@@ -131,7 +136,7 @@
       <span class="title">
         <a href="https://github.com/jnros/cuda-attn-ref">Paged attention: KV cache as virtual memory (CUDA)</a>
         <span class="finding">From-scratch CUDA implementation treating KV cache as paged virtual memory.</span>
-        <span class="links"><a href="https://github.com/jnros/cuda-attn-ref">code</a></span>
+        <span class="links"><a class="btn btn-repo" href="https://github.com/jnros/cuda-attn-ref">repo</a></span>
       </span>
     </li>
 
@@ -140,7 +145,7 @@
       <span class="title">
         <a href="https://github.com/jnros/inf-bench">Decode attention: MHA / GQA / MQA</a>
         <span class="finding">Benchmarked attention variants across memory- and compute-bound regimes.</span>
-        <span class="links"><a href="https://github.com/jnros/inf-bench">code</a></span>
+        <span class="links"><a class="btn btn-repo" href="https://github.com/jnros/inf-bench">repo</a></span>
       </span>
     </li>
 
@@ -149,7 +154,7 @@
       <span class="title">
         <a href="https://gist.github.com/jnros/b198b7b78120f972b84d4787e9eb9c57">Kimi K2.5: methods + systems impact</a>
         <span class="finding">Analysis of training methods and inference-side consequences.</span>
-        <span class="links"><a href="https://gist.github.com/jnros/b198b7b78120f972b84d4787e9eb9c57">analysis</a></span>
+        <span class="links"><a class="btn btn-repo" href="https://gist.github.com/jnros/b198b7b78120f972b84d4787e9eb9c57">gist</a></span>
       </span>
     </li>
 
@@ -158,7 +163,7 @@
       <span class="title">
         <a href="https://github.com/jnros/slice">FP64 on Blackwell INT8 tensor cores (Ozaki scheme): POC</a>
         <span class="finding">Proof of concept for emulated double precision on INT8 hardware.</span>
-        <span class="links"><a href="https://github.com/jnros/slice">code</a> <a href="https://gist.github.com/jnros/c97b01bff9aa683069556e6e0b6ae073">analysis</a></span>
+        <span class="links"><a class="btn btn-repo" href="https://github.com/jnros/slice">repo</a> <a class="btn btn-repo" href="https://gist.github.com/jnros/c97b01bff9aa683069556e6e0b6ae073">gist</a></span>
       </span>
     </li>
 
@@ -167,7 +172,7 @@
       <span class="title">
         <a href="https://gist.github.com/jnros/92ed1e5b5af05d3a2fd353b4537af744">KV offload (Engram): system design</a>
         <span class="finding">Design for KV cache offload across memory tiers.</span>
-        <span class="links"><a href="https://gist.github.com/jnros/92ed1e5b5af05d3a2fd353b4537af744">analysis</a></span>
+        <span class="links"><a class="btn btn-repo" href="https://gist.github.com/jnros/92ed1e5b5af05d3a2fd353b4537af744">gist</a></span>
       </span>
     </li>
 

@@ -155,13 +155,36 @@ ul.notes li:last-child { border-bottom: 1px solid var(--faint); }
   white-space: nowrap;
 }
 
-.notes .title a {
+.notes .title > a {
   color: var(--ink);
-  text-decoration: none;
   font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--muted);
+  text-underline-offset: 3px;
 }
 
-.notes .title a:hover { color: var(--trace); }
+.notes .title > a:hover {
+  color: var(--trace);
+  text-decoration-color: var(--trace);
+}
+
+.notes .title > a::after {
+  content: "";
+  display: inline-block;
+  width: 2cap;
+  height: 1.7cap;
+  margin-left: 6px;
+  vertical-align: -0.35cap;
+  background-color: var(--trace);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='3' y1='12' x2='20' y2='12'/%3E%3Cpolyline points='13 5 20 12 13 19'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='3' y1='12' x2='20' y2='12'/%3E%3Cpolyline points='13 5 20 12 13 19'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
 
 .notes .finding {
   display: block;
@@ -185,13 +208,47 @@ ul.notes li:last-child { border-bottom: 1px solid var(--faint); }
 
 .notes .links a:hover { text-decoration: underline; }
 
+.notes .btn {
+  display: inline-block;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 2px 9px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  margin-right: 8px;
+}
+
+.notes .btn:hover { text-decoration: none; }
+
+.notes .links a.btn-writeup {
+  background: transparent;
+  color: var(--trace);
+  border-color: var(--trace);
+}
+
+.notes .links a.btn-writeup:hover {
+  background: var(--trace);
+  color: var(--paper);
+}
+
+.notes .links a.btn-repo {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--muted);
+}
+
+.notes .links a.btn-repo:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
 @media (max-width: 480px) {
   ul.notes li { grid-template-columns: 1fr; gap: 2px; }
 }
 
 /* ---------- provenance / about ---------- */
 
-section.prov { margin-top: 56px; }
+section.prov { margin-top: 36px; }
 
 .prov h2 {
   font-family: "IBM Plex Mono", monospace;
