@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SACC: A Synthetic PCIe Accelerator — Linear Group</title>
+<meta name="description" content="Building a synthetic PCIe accelerator — QEMU device model plus Linux driver — to instrument kernel-bypass submission paths from both sides.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<script>
+  // both modes available; dark is the default, ?theme=light for light
+  var t = new URLSearchParams(location.search).get("theme");
+  document.documentElement.setAttribute("data-theme",
+    t === "light" ? "light" : "dark");
+</script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-K394KQK3GS"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-K394KQK3GS');
+</script>
+</head>
+<body>
+<div class="wrap">
+
+<header class="site">
+  <svg class="mark" width="34" height="24" viewBox="0 0 34 24" aria-hidden="true">
+    <polyline points="2,21 17,6 32,6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="17" cy="6" r="2.8" fill="#C81F2E"/>
+  </svg>
+  <a class="wordmark" href="/">Linear Group</a>
+  <span class="sub">systems research</span>
+</header>
+
+<article class="note">
+
+<h1>SACC: A Synthetic PCIe Accelerator</h1>
+<p class="meta">2026-08 · John Rose · <a href="mailto:john@lineargp.com">john@lineargp.com</a> · code: <a href="https://github.com/jnros/sacc">github.com/jnros/sacc</a></p>
+
+<p>During LLM decode, where does the Linux kernel spend time? I recently found that vLLM inference rarely calls <code>ioctl()</code> through the kernel to the GPU. GPUs route around the kernel using buffers and doorbells over PCIe. NVIDIA is closed-source, and chip fabs are expensive. So I built a synthetic PCIe accelerator (spec + both halves) to get a better look.</p>
+
+<h2>Profiling decode</h2>
+<p>To profile inference, I started with <code>strace</code> on a VM while vLLM served Qwen 2.5 7B. To ensure a decode workload, I used short input lengths and long outputs.</p>
+<pre><code>$ vllm bench serve --model /home/jnros/models/qwen2.5-7b-fp8 \
+    --dataset-name random --random-input-len 32 --random-output-len 2000 \
+    --max-concurrency 1 --num-prompts 4 &amp;</code></pre>
+
+<p>I expected a storm of <code>ioctl()</code> calls. Instead, across thousands of generated tokens, I found essentially no GPU-generated syscalls. Kernel time went to <code>futex</code>, <code>epoll_wait</code>, and <code>poll</code>. Waiting and coordinating, not moving data.</p>
+<pre><code>$ strace -c -f -p $(pgrep -f EngineCore) -o ~/decode_strace.txt
+
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 49.40   50.334147         550     91501     15655 futex
+ 32.50   33.114890         726     45567           epoll_wait
+ 12.52   12.758253         565     22561           poll
+  4.20    4.281347       69053        62           epoll_pwait
+  0.94    0.958418       73724        13        10 restart_syscall
+  0.17    0.176046           8     21320           getpid
+...
+  0.01    0.008825        8825         1           ioctl
+  0.00    0.002269          34        65           recvfrom
+  0.00    0.001821          29        62           io_uring_enter
+  0.00    0.000097          48         2           clock_nanosleep</code></pre>
+
+<p>So NVIDIA's driver must submit CUDA kernel launches through userspace-mapped command buffers and doorbells. From the procfs entry for the vLLM EngineCore process:</p>
+<pre><code>$ grep -iE "nvidia|nvidiactl|/dev/nvidia" /proc/32312/maps
+200200000-200400000 rw-s 00000000 00:05 647 /dev/nvidia0
+200400000-203400000 rw-s 00000000 00:05 646 /dev/nvidiactl
+206000000-206200000 rw-s 00000000 00:05 646 /dev/nvidiactl
+206200000-206400000 rw-s 00000000 00:05 646 /dev/nvidiactl
+206400000-206600000 rw-s 206400000 00:05 648 /dev/nvidia-uvm
+&lt;continued for cutlass and nvidia-uvm&gt;</code></pre>
+
+<p>These are CPU virtual mappings to the driver's control plane and GPU MMIO. The inverse runs through IOMMU, where the GPU DMAs into host memory. The kernel sets up the mappings and gets out of the way.</p>
+
+<p>The good stuff sits one layer down with PCIe. The doorbell ring is an MMIO write that becomes a PCIe posted write (MWr TLP) to the GPU's BAR. Multi-GPU inference and peer-to-peer (RDMA, disagg, storage) depend heavily on PCIe topology and ACS settings.</p>
+
+<h2>SACC</h2>
+<figure>
+  <a href="hero.png" target="_blank" rel="noopener">
+    <img src="hero.png" alt="SACC">
+  </a>
+</figure>
+
+<p>So I created SACC: Synthetic PCIe Accelerator, for instrumenting kernel-bypass submission paths from both sides. Device model and kernel driver. Spec and code: <strong><a href="https://github.com/jnros/sacc">github.com/jnros/sacc</a></strong>.</p>
+<p>NVIDIA's stack is proprietary and enormous. (Like a moat!) I need to chase doorbell mechanisms and debug RDMA across different topologies. A minimal and inspectable tool for quick iteration. A moat I want to swim in. What better way than to build from both sides?</p>
+<p>SACC is a PCIe accelerator with the goal of instrumenting kernel-bypass submission paths (host-device control plane) from both sides: device model and driver. The device model runs in QEMU (underneath the OS). The driver is a Linux kernel module. I wrote a specification first, then coded both halves of it. <strong>v0.1 covers device identity, BAR layout, register file, and driver probe/bind. Rings, doorbells, MSI-X, and DMA are next.</strong></p>
+
+<h2>Spec notes</h2>
+<p>I isolated the doorbell to its own 4K page so that userspace can <code>mmap</code> it without exposing registers. I used an NVMe-style phase bit for completion ownership, which means the driver never writes to the completion ring. Ownership rules and memory barrier obligations are written into the document.</p>
+<p>The spec exercise alone is worth the effort for PCIe understanding, but the satisfaction comes from seeing your device for the first time.</p>
+
+<h2>Seeing the device</h2>
+<figure>
+  <a href="lspci_new_annotated.png" target="_blank" rel="noopener">
+    <img src="lspci_new_annotated.png" alt="annotated lspci output">
+  </a>
+  <figcaption>SACC enumerated behind a q35 root port.</figcaption>
+</figure>
+
+<h2>Topology as a parameter</h2>
+<p>QEMU surprised me all around. It's not just the second half of KVM. Open source, approachable, enormous breadth of capabilities. I built SACC to show up behind a root port on q35, mirroring the way a GPU shows up to the OS. QEMU allows for quick spin-up of arbitrary topology from command-line arguments. Linux treats the result no differently than physical reality.</p>
+<p>Want an additional PCIe root complex? Great. How about 5? Three nested switches with storage, network, and SACC devices scattered throughout? Linux took every bonkers topology I fed it, walked the buses, enumerated the devices, and booted quickly.</p>
+<p>Network fabric moves from expensive fixed constraint to iterative parameter. Next, I'll tackle NUMA.</p>
+
+<div class="implications">
+<h2>Implications</h2>
+<p>These pieces form an instrument: a device whose behavior I define, in a fabric whose topology I define, driven by a driver I wrote. For anyone looking to juggle a QEMU codebase next to a kernel codebase: highly recommended.</p>
+
+<p>Next up, I plan to build rings and doorbells, RDMA at link speed I control, sensitivities across topologies, and driver bring-up for hardware I don't have.</p>
+</div>
+
+<p class="meta">Spec, QEMU device model, and kernel driver: <a href="https://github.com/jnros/sacc">github.com/jnros/sacc</a></p>
+
+</article>
+
+<footer class="site">
+  <span>© 2026 Linear Group LLC</span>
+  <span><a href="https://github.com/jnros">github</a> · <a href="https://www.linkedin.com/in/johnrose/">linkedin</a> · <a href="mailto:john@lineargp.com">john@lineargp.com</a></span>
+</footer>
+
+</div>
+</body>
+</html>
