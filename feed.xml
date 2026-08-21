@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Linear Group — research notes</title>
+  <subtitle>Notes on low-level systems and GPUs: inference, memory, and the hardware underneath.</subtitle>
+  <id>https://lineargp.com/</id>
+  <link rel="alternate" type="text/html" href="https://lineargp.com/"/>
+  <link rel="self" type="application/atom+xml" href="https://lineargp.com/feed.xml"/>
+  <updated>2026-08-20T11:11:09-05:00</updated>
+  <author>
+    <name>John Rose</name>
+    <email>john@lineargp.com</email>
+    <uri>https://lineargp.com/</uri>
+  </author>
+  <rights>© 2026 Linear Group LLC</rights>
+
+  <entry>
+    <title>SACC: A Synthetic PCIe Accelerator</title>
+    <id>https://lineargp.com/notes/2026-08-synthetic-pcie/</id>
+    <link rel="alternate" type="text/html" href="https://lineargp.com/notes/2026-08-synthetic-pcie/"/>
+    <published>2026-08-01T00:00:00Z</published>
+    <updated>2026-08-20T11:11:09-05:00</updated>
+    <summary>Building a synthetic PCIe accelerator — QEMU device model plus Linux driver — to instrument kernel-bypass submission paths from both sides.</summary>
+  </entry>
+
+  <entry>
+    <title>RDMA over Ethernet (RoCE) for Disaggregated Inference</title>
+    <id>https://lineargp.com/notes/2026-07-rdma-roce/</id>
+    <link rel="alternate" type="text/html" href="https://lineargp.com/notes/2026-07-rdma-roce/"/>
+    <published>2026-07-01T00:00:00Z</published>
+    <updated>2026-08-05T11:22:28-05:00</updated>
+    <summary>Moving a Qwen KV cache over RDMA/RoCE for disaggregated prefill/decode.</summary>
+  </entry>
+
+  <entry>
+    <title>GPU Passthrough: VFIO, IOMMU, and Thermal Debug</title>
+    <id>https://lineargp.com/notes/2026-07-gpu-passthrough/</id>
+    <link rel="alternate" type="text/html" href="https://lineargp.com/notes/2026-07-gpu-passthrough/"/>
+    <published>2026-07-01T00:00:00Z</published>
+    <updated>2026-08-05T11:22:28-05:00</updated>
+    <summary>Passing an NVIDIA RTX 4070 Ti SUPER through to a KVM guest on an AMD host, headless, start to finish.</summary>
+  </entry>
+
+</feed>

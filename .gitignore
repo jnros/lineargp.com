@@ -1,0 +1,8 @@
+# Private drafting notes — must not ship. Keeping these out of the repo keeps
+# them out of the deployed site, sitemap, and feed.
+notes/**/article_basis.md
+
+# Untracked duplicates of images that already live beside their notes.
+img_bkup/
+
+template.html

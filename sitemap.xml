@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://lineargp.com/</loc>
+    <lastmod>2026-08-20</lastmod>
+  </url>
+  <url>
+    <loc>https://lineargp.com/notes/2026-08-synthetic-pcie/</loc>
+    <lastmod>2026-08-20</lastmod>
+  </url>
+  <url>
+    <loc>https://lineargp.com/notes/2026-07-rdma-roce/</loc>
+    <lastmod>2026-08-05</lastmod>
+  </url>
+  <url>
+    <loc>https://lineargp.com/notes/2026-07-gpu-passthrough/</loc>
+    <lastmod>2026-08-05</lastmod>
+  </url>
+</urlset>

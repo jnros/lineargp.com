@@ -5,6 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GPU Passthrough: VFIO, IOMMU, and Thermal Debug — Linear Group</title>
 <meta name="description" content="Passing an NVIDIA RTX 4070 Ti SUPER through to a KVM guest on an AMD host, headless, start to finish.">
+<link rel="canonical" href="https://lineargp.com/notes/2026-07-gpu-passthrough/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Linear Group">
+<meta property="og:title" content="GPU Passthrough: VFIO, IOMMU, and Thermal Debug">
+<meta property="og:description" content="Passing an NVIDIA RTX 4070 Ti SUPER through to a KVM guest on an AMD host, headless, start to finish.">
+<meta property="og:url" content="https://lineargp.com/notes/2026-07-gpu-passthrough/">
+<meta property="og:image" content="https://lineargp.com/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Linear Group — systems research.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="Linear Group research notes" href="/feed.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,6 +39,47 @@
 
   gtag('config', 'G-K394KQK3GS');
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "@id": "https://lineargp.com/notes/2026-07-gpu-passthrough/#post",
+  "headline": "GPU Passthrough: VFIO, IOMMU, and Thermal Debug",
+  "description": "Passing an NVIDIA RTX 4070 Ti SUPER through to a KVM guest on an AMD host, headless, start to finish.",
+  "url": "https://lineargp.com/notes/2026-07-gpu-passthrough/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://lineargp.com/notes/2026-07-gpu-passthrough/"
+  },
+  "datePublished": "2026-07-01",
+  "inLanguage": "en",
+  "image": "https://lineargp.com/img/og.png",
+  "keywords": [
+    "VFIO",
+    "IOMMU",
+    "KVM",
+    "GPU passthrough",
+    "NVIDIA",
+    "virtualization",
+    "thermal debugging"
+  ],
+  "author": {
+    "@type": "Person",
+    "@id": "https://lineargp.com/#john",
+    "name": "John Rose",
+    "url": "https://lineargp.com/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "@id": "https://lineargp.com/#linear",
+    "name": "Linear Group LLC",
+    "url": "https://lineargp.com/"
+  },
+  "isPartOf": {
+    "@id": "https://lineargp.com/#notes"
+  }
+}
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -40,7 +96,7 @@
 <article class="note">
 
 <h1>GPU Passthrough: VFIO, IOMMU, and Thermal Debug</h1>
-<p class="meta">2026-07 · John Rose · <a href="mailto:john@lineargp.com">john@lineargp.com</a> · code: <a href="https://github.com/jnros">github.com/jnros</a></p>
+<p class="meta"><time datetime="2026-07">2026-07</time> · John Rose · <a href="mailto:john@lineargp.com">john@lineargp.com</a> · code: <a href="https://github.com/jnros">github.com/jnros</a></p>
 
 <p>Full build log: passing an NVIDIA RTX 4070 Ti SUPER through to a KVM guest on an AMD host, headless, start to finish. Part 6 describes my first brush with thermal calamity.</p>
 

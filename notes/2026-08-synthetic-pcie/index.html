@@ -5,6 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SACC: A Synthetic PCIe Accelerator — Linear Group</title>
 <meta name="description" content="Building a synthetic PCIe accelerator — QEMU device model plus Linux driver — to instrument kernel-bypass submission paths from both sides.">
+<link rel="canonical" href="https://lineargp.com/notes/2026-08-synthetic-pcie/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Linear Group">
+<meta property="og:title" content="SACC: A Synthetic PCIe Accelerator">
+<meta property="og:description" content="Building a synthetic PCIe accelerator — QEMU device model plus Linux driver — to instrument kernel-bypass submission paths from both sides.">
+<meta property="og:url" content="https://lineargp.com/notes/2026-08-synthetic-pcie/">
+<meta property="og:image" content="https://lineargp.com/notes/2026-08-synthetic-pcie/hero.png">
+<meta property="og:image:width" content="1920">
+<meta property="og:image:height" content="1080">
+<meta property="og:image:alt" content="A synthetic PCIe accelerator enumerated by the Linux kernel.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="Linear Group research notes" href="/feed.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,6 +39,49 @@
 
   gtag('config', 'G-K394KQK3GS');
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "@id": "https://lineargp.com/notes/2026-08-synthetic-pcie/#post",
+  "headline": "SACC: A Synthetic PCIe Accelerator",
+  "description": "Building a synthetic PCIe accelerator — QEMU device model plus Linux driver — to instrument kernel-bypass submission paths from both sides.",
+  "url": "https://lineargp.com/notes/2026-08-synthetic-pcie/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://lineargp.com/notes/2026-08-synthetic-pcie/"
+  },
+  "datePublished": "2026-08-01",
+  "inLanguage": "en",
+  "image": "https://lineargp.com/notes/2026-08-synthetic-pcie/hero.png",
+  "keywords": [
+    "PCIe",
+    "QEMU",
+    "Linux kernel driver",
+    "kernel bypass",
+    "doorbell",
+    "BAR",
+    "MMIO",
+    "DMA",
+    "GPU inference"
+  ],
+  "author": {
+    "@type": "Person",
+    "@id": "https://lineargp.com/#john",
+    "name": "John Rose",
+    "url": "https://lineargp.com/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "@id": "https://lineargp.com/#linear",
+    "name": "Linear Group LLC",
+    "url": "https://lineargp.com/"
+  },
+  "isPartOf": {
+    "@id": "https://lineargp.com/#notes"
+  }
+}
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -40,7 +98,7 @@
 <article class="note">
 
 <h1>SACC: A Synthetic PCIe Accelerator</h1>
-<p class="meta">2026-08 · John Rose · <a href="mailto:john@lineargp.com">john@lineargp.com</a> · code: <a href="https://github.com/jnros/sacc">github.com/jnros/sacc</a></p>
+<p class="meta"><time datetime="2026-08">2026-08</time> · John Rose · <a href="mailto:john@lineargp.com">john@lineargp.com</a> · code: <a href="https://github.com/jnros/sacc">github.com/jnros/sacc</a></p>
 
 <p>During LLM decode, where does the Linux kernel spend time? I recently found that vLLM inference rarely calls <code>ioctl()</code> through the kernel to the GPU. GPUs route around the kernel using buffers and doorbells over PCIe. NVIDIA is closed-source, and chip fabs are expensive. So I built a synthetic PCIe accelerator (spec + both halves) to get a better look.</p>
 
