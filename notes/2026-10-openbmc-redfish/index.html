@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenBMC and Redfish on GB200 — Linear Group</title>
+<meta name="description" content="Out-of-band management for GPU fleets: BMC, Redfish, MCTP, PLDM, SPDM, then hands-on with the GB200NVL OpenBMC firmware image booted in QEMU.">
+<link rel="canonical" href="https://lineargp.com/notes/2026-10-openbmc-redfish/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Linear Group">
+<meta property="og:title" content="OpenBMC and Redfish on GB200">
+<meta property="og:description" content="Out-of-band management for GPU fleets: BMC, Redfish, MCTP, PLDM, SPDM, then hands-on with the GB200NVL OpenBMC firmware image booted in QEMU.">
+<meta property="og:url" content="https://lineargp.com/notes/2026-10-openbmc-redfish/">
+<meta property="og:image" content="https://lineargp.com/notes/2026-10-openbmc-redfish/oob-mgmt.png">
+<meta property="og:image:width" content="1920">
+<meta property="og:image:height" content="1080">
+<meta property="og:image:alt" content="Out-of-band management: GPU server linked over MCTP to OpenBMC, Redfish out.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="Linear Group research notes" href="/feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<script>
+  // both modes available; dark is the default, ?theme=light for light
+  var t = new URLSearchParams(location.search).get("theme");
+  document.documentElement.setAttribute("data-theme",
+    t === "light" ? "light" : "dark");
+</script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-K394KQK3GS"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-K394KQK3GS');
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "@id": "https://lineargp.com/notes/2026-10-openbmc-redfish/#post",
+  "headline": "OpenBMC and Redfish on GB200",
+  "description": "Out-of-band management for GPU fleets: BMC, Redfish, MCTP, PLDM, SPDM, then hands-on with the GB200NVL OpenBMC firmware image booted in QEMU.",
+  "url": "https://lineargp.com/notes/2026-10-openbmc-redfish/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://lineargp.com/notes/2026-10-openbmc-redfish/"
+  },
+  "datePublished": "2026-10-01",
+  "inLanguage": "en",
+  "image": "https://lineargp.com/notes/2026-10-openbmc-redfish/oob-mgmt.png",
+  "keywords": [
+    "OpenBMC",
+    "Redfish",
+    "BMC",
+    "out-of-band management",
+    "MCTP",
+    "PLDM",
+    "SPDM",
+    "GB200",
+    "QEMU",
+    "ASPEED"
+  ],
+  "author": {
+    "@type": "Person",
+    "@id": "https://lineargp.com/#john",
+    "name": "John Rose",
+    "url": "https://lineargp.com/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "@id": "https://lineargp.com/#linear",
+    "name": "Linear Group LLC",
+    "url": "https://lineargp.com/"
+  },
+  "isPartOf": {
+    "@id": "https://lineargp.com/#notes"
+  }
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+
+<header class="site">
+  <svg class="mark" width="34" height="24" viewBox="0 0 34 24" aria-hidden="true">
+    <polyline points="2,21 17,6 32,6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="17" cy="6" r="2.8" fill="#C81F2E"/>
+  </svg>
+  <a class="wordmark" href="/">Linear Group</a>
+  <span class="sub">systems research</span>
+</header>
+
+<article class="note">
+
+<h1>OpenBMC and Redfish on GB200</h1>
+<p class="meta"><time datetime="2026-10">2026-10</time> · John Rose · <a href="mailto:john@lineargp.com">john@lineargp.com</a></p>
+
+<p>If a GPU node crashes in the forest, OOB is there to hear it. Out-of-band (OOB) management is the layer of control and telemetry that sits alongside training and inference racks in a server fleet.</p>
+
+<p>Some definitions first, then hands-on with OpenBMC: the GB200 firmware image, running on an x86 lab server via QEMU. Recipe in the <a href="#appendix">appendix</a>.</p>
+
+<h2>Definitions</h2>
+<p>Acronyms abound.</p>
+
+<p><strong>BMC.</strong> Baseboard Management Controller. A small, always-on computer on the server motherboard. Monitors and controls the host: power, temperature, fans, firmware flash, serial console. On GB200, it's an ARM SoC from ASPEED.</p>
+
+<p><strong>OpenBMC.</strong> An open-source Linux distro for BMCs, built with Yocto. Services ("phosphor" daemons) talk over D-Bus, which is why systemd units have names like <code>xyz.openbmc_project.*</code>.</p>
+
+<p><strong>Redfish.</strong> The standard server management API. RESTful HTTPS with JSON, organized as a tree at <code>/redfish/v1/</code> (Systems, Chassis, Managers, UpdateService). Because it's HTTPS, it works with <code>curl</code> and scripted tooling. In OpenBMC, <code>bmcweb</code> serves it.</p>
+
+<p><strong>MCTP.</strong> Management Component Transport Protocol. Management traffic <em>inside</em> the server. Carries messages from the BMC to components (GPUs, NICs, host CPU) over I2C/SMBus, PCIe, or USB. Other protocols ride on top of MCTP.</p>
+
+<p><strong>PLDM.</strong> Platform Level Data Model. Message types carried over MCTP. Relevant here: Type 2 (platform monitoring: sensors and events), Type 4 (FRU inventory: what's installed), and Type 5 (firmware update). In OpenBMC, <code>pldmd</code> speaks it.</p>
+
+<p><strong>SPDM.</strong> Security Protocol and Data Model. Device authentication and signed firmware measurements, also commonly carried over MCTP. The BMC uses SPDM to verify a GPU and its firmware.</p>
+
+<figure>
+  <a href="oob-mgmt.png" target="_blank" rel="noopener">
+    <img src="oob-mgmt.png" alt="GPU server with 2 CPUs and 4 GPUs linked over MCTP to OpenBMC. Links: PLDM T2 status, PLDM T5 operations, SPDM security, PLDM T2 telemetry, PLDM T4 inventory. Inside OpenBMC: mctpd, pldmd, D-Bus, Redfish out.">
+  </a>
+  <figcaption>Out-of-band management</figcaption>
+</figure>
+
+<h2>The control dashboard</h2>
+<p>Before we peek under the hood, let's lead with the payoff. This console, served by my emulated GB200NVL BMC, provides out-of-band management of a GB200 node, control and telemetry. Everything but the Blackwells.</p>
+
+<figure>
+  <a href="console.png" target="_blank" rel="noopener">
+    <img src="console.png" alt="OpenBMC web console overview page for gb200nvl-obmc">
+  </a>
+  <figcaption>OpenBMC console for emulated GB200</figcaption>
+</figure>
+
+<p>The dashboard resembles the 2005-era console for IBM POWER servers, the HMC (Hardware Management Console). I wrote dynamic I/O reassignment for that platform (<code>rpadlpar</code>): moving PCI slots between running partitions from the HMC. It still ships in mainline Linux 20 years later.</p>
+
+<h2>Redfish from the command line</h2>
+<p>Because Redfish is HTTPS and JSON, we can forgo the browser. Imagine the ease of tooling across racks, clusters, and fleets.</p>
+
+<p>Show us the root:</p>
+<pre><code>$ B=https://127.0.0.1:2443
+$ AUTH="-u root:0penBmc"
+$ curl -sk $AUTH $B/redfish/v1 | jq
+{
+  "@odata.id": "/redfish/v1",
+  "@odata.type": "#ServiceRoot.v1_15_0.ServiceRoot",
+  "AccountService": {
+    "@odata.id": "/redfish/v1/AccountService"
+  },
+  "Cables": {
+    "@odata.id": "/redfish/v1/Cables"
+  },
+  "CertificateService": {
+    "@odata.id": "/redfish/v1/CertificateService"
+  },
+  "Chassis": {
+    "@odata.id": "/redfish/v1/Chassis"
+  },
+  "EventService": {
+    "@odata.id": "/redfish/v1/EventService"
+  },
+  "Id": "RootService",
+  "JsonSchemas": {
+    "@odata.id": "/redfish/v1/JsonSchemas"
+  },
+  "Links": {
+    "ManagerProvidingService": {
+      "@odata.id": "/redfish/v1/Managers/bmc"
+    },
+    "Sessions": {
+      "@odata.id": "/redfish/v1/SessionService/Sessions"
+    }
+  },
+  "Managers": {
+    "@odata.id": "/redfish/v1/Managers"
+  },
+  ...
+}</code></pre>
+
+<p>BMC, describe yourself:</p>
+<pre><code>$ curl -sk $AUTH $B/redfish/v1/Managers/bmc | jq '{Model, FirmwareVersion, Status, PowerState}'
+{
+  "Model": "OpenBmc",
+  "FirmwareVersion": "2.18.0-dev-1389-g1dfba95c0a.edsbuild9.2025-07-02_09:35_am",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "PowerState": "On"
+}</code></pre>
+
+<p>Describe the host you manage:</p>
+<pre><code>$ curl -sk $AUTH $B/redfish/v1/Systems/system | jq '{PowerState, BootProgress, Status, Actions}'
+{
+  "PowerState": null,
+  "BootProgress": null,
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "Actions": {
+    "#ComputerSystem.Reset": {
+      "@Redfish.ActionInfo": "/redfish/v1/Systems/system/ResetActionInfo",
+      "target": "/redfish/v1/Systems/system/Actions/ComputerSystem.Reset"
+    }
+  }
+}</code></pre>
+
+<p>Show us what firmware you could track or update:</p>
+<pre><code>$ curl -sk $AUTH $B/redfish/v1/UpdateService/FirmwareInventory | jq '.Members'
+[
+  {
+    "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/ed5cb8c3"
+  }
+]</code></pre>
+
+<p>Take action. Power the system on:</p>
+<pre><code>$ curl -sk $AUTH -X POST $B/redfish/v1/Systems/system/Actions/ComputerSystem.Reset \
+    -H 'Content-Type: application/json' -d '{"ResetType":"On"}'
+{
+  "error": {
+    "@Message.ExtendedInfo": [
+      {
+        "@odata.type": "#Message.v1_1_1.Message",
+        "Message": "The requested resource of type Set named 'Reset' was not found.",
+        "MessageArgs": [
+          "Set",
+          "Reset"
+        ],
+        "MessageId": "Base.1.19.ResourceNotFound",
+        "MessageSeverity": "Critical",
+        "Resolution": "Provide a valid resource identifier and resubmit the request."
+      }
+    ],
+    "code": "Base.1.19.ResourceNotFound",
+    "message": "The requested resource of type Set named 'Reset' was not found."
+  }
+}</code></pre>
+<p>In the emulated case there's no host system to power on, hence the error.</p>
+
+<h2>Under the hood: flash</h2>
+<p>Let's begin with the flash partitions as Linux sees them:</p>
+<pre><code>root@gb200nvl-obmc:~# cat /proc/mtd
+dev:    size   erasesize  name
+mtd0: 04000000 00010000 "bmc"
+mtd1: 000e0000 00010000 "u-boot"
+mtd2: 00020000 00010000 "u-boot-env"
+mtd3: 00900000 00010000 "kernel"
+mtd4: 02000000 00010000 "rofs"
+mtd5: 01600000 00010000 "rwfs"
+mtd6: 04000000 00010000 "pnor"</code></pre>
+
+<p>MTD stands for Memory Technology Device, the Linux subsystem for raw flash chips. <code>mtd0</code> and <code>mtd6</code> are two 64&nbsp;MiB flash chips. Double-click to get at topology:</p>
+<pre><code>root@gb200nvl-obmc:~# for i in 0 6; do echo mtd$i; readlink /sys/class/mtd/mtd$i/device; done
+mtd0
+../../../spi0.0
+mtd6
+../../../spi1.0</code></pre>
+
+<p><code>mtd0</code> "bmc" describes a flash chip with these children. The sizes add up to 64&nbsp;MiB, or <code>0x4000000</code>.</p>
+
+<table>
+  <thead>
+    <tr><th>Partition</th><th>Size</th><th>What it is</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>u-boot</code></td><td><code>0xe0000</code> · 896 KiB</td><td>Bootloader</td></tr>
+    <tr><td><code>u-boot-env</code></td><td><code>0x20000</code> · 128 KiB</td><td>Boot variables</td></tr>
+    <tr><td><code>kernel</code></td><td><code>0x900000</code> · 9 MiB</td><td>FIT image (kernel + device tree)</td></tr>
+    <tr><td><code>rofs</code></td><td><code>0x2000000</code> · 32 MiB</td><td>squashfs root, OpenBMC itself</td></tr>
+    <tr><td><code>rwfs</code></td><td><code>0x1600000</code> · 22 MiB</td><td>jffs2, persistent settings</td></tr>
+  </tbody>
+</table>
+
+<p>The last entry, <code>mtd6</code>, describes a second flash chip: PNOR. That's the OpenPOWER term for the host processor's firmware flash, which the BMC can read and write. On GB200 the host is a Grace CPU, and its UEFI firmware lives on a chip like PNOR.</p>
+
+<h2>Under the hood: OS</h2>
+<pre><code>root@gb200nvl-obmc:~# uname -a
+Linux gb200nvl-obmc 6.6.95-b97cabd-00457-gb97cabdf9a44 #1 SMP Wed Jul  2 03:20:19 UTC 2025 armv7l GNU/Linux
+root@gb200nvl-obmc:~# cat /etc/os-release
+ID=openbmc-phosphor
+NAME="Phosphor OpenBMC (Phosphor OpenBMC Project Reference Distro)"
+VERSION="2.18.0-dev"
+VERSION_ID=2.18.0-dev-1389-g1dfba95c0a.edsbuild9.2025-07-02_09:35_am
+VERSION_CODENAME="styhead"
+PRETTY_NAME="Phosphor OpenBMC (Phosphor OpenBMC Project Reference Distro) 2.18.0-dev"
+CPE_NAME="cpe:/o:openembedded:openbmc-phosphor:2.18.0-dev-1389-g1dfba95c0a.edsbuild9.2025-07-02_09:35_AM"
+BUILD_ID="20250702162612"
+OPENBMC_TARGET_MACHINE="gb200nvl-obmc"
+EXTENDED_VERSION="2.18.0-dev-1389-g1dfba95c0a"</code></pre>
+
+<p>Kernel 6.6.95 on <code>armv7l</code>: OpenBMC's 6.6 kernel branch on a 32-bit Cortex-A7. OpenBMC 2.18.0-dev on Yocto "styhead", built July 2, 2025 for <code>gb200nvl-obmc</code>.</p>
+
+<h2>Under the hood: services</h2>
+<pre><code>root@gb200nvl-obmc:~# systemctl list-units --no-pager | grep -iE "mctp|pldm|spdm|bmcweb|ipmi|redfish"
+  bmcweb.service      loaded active running   Start bmcwebd server
+  mctpd.service       loaded active running   MCTP control protocol daemon
+  phosphor-certificate-manager@bmcweb.service loaded active running   Phosphor certificate manager for bmcweb
+  pldmd.service       loaded active running   Phosphor PLDM Daemon
+  xyz.openbmc_project.mctpreactor.service     loaded active running   MCTP device configuration
+  bmcweb.socket       loaded active running   BMC Webserver socket
+  mctp-local.target   loaded active active    MCTP local network configuration
+  mctp.target         loaded active active    MCTP infrastructure active</code></pre>
+
+<p>This is the core of the GB200 management stack:</p>
+<ul>
+  <li><strong>bmcweb</strong> is the Redfish server, the primary out-of-band management interface.</li>
+  <li><strong>certificate-manager@bmcweb</strong> manages bmcweb's TLS certificate.</li>
+  <li><strong>mctpd</strong> is the MCTP control daemon. It discovers endpoints and assigns endpoint IDs (EIDs).</li>
+  <li><strong>pldmd</strong> is the PLDM daemon: sensors, FRU inventory, and firmware update (PLDM Type 5) over MCTP.</li>
+</ul>
+
+<p>Note that IPMI is not running. Intelligent Platform Management Interface is Redfish's predecessor. While IPMI is still common, Redfish is largely replacing it.</p>
+
+<div class="implications">
+<h2>Implications</h2>
+<p>Out-of-band management keeps watch over the GPU fleet. The BMC is an embedded ARM computer running Linux, independent of the host. OpenBMC gives a standard software stack, and Redfish gives standard control: plain HTTPS and JSON that scales from one <code>curl</code> to tooling across a whole fleet.</p>
+
+<p>Every Redfish request becomes D-Bus calls to phosphor daemons. When a GPU, NIC, or CPU is the target, MCTP is the language. The sub-dialects are PLDM for sensors, inventory, and firmware update, and SPDM for device verification.</p>
+
+<p>For now, our emulated BMC has the daemons running but no Blackwell GPUs to talk to. As with <a href="/notes/2026-08-synthetic-pcie/">SACC</a>, QEMU turns hardware I don't have into something I can boot, poke, and iterate on. For now.</p>
+</div>
+
+<h2 id="appendix">Appendix: GB200 BMC in QEMU</h2>
+
+<p><strong>Build QEMU for an ARM target.</strong> Use v10.1 or later to get the GB200 machine.</p>
+<pre><code>~/src/qemu $ cat ./VERSION
+11.1.50
+~/src/qemu $ ./configure --target-list=arm-softmmu
+~/src/qemu $ make -j8</code></pre>
+
+<p>Now QEMU is built to emulate ARM on x86. What machines can we boot? Now entering the museum:</p>
+<pre><code>~/src/qemu $ build/qemu-system-arm -machine help
+Supported machines are:
+anacapa-bmc          Facebook Anacapa BMC (Cortex-A7)
+ast1030-evb          Aspeed AST1030 MiniBMC (Cortex-M4)
+...
+canon-a1100          Canon PowerShot A1100 IS (ARM946)
+...
+g220a-bmc            Bytedance G220A BMC (ARM1176)
+gb200nvl-bmc         Nvidia GB200NVL BMC (Cortex-A7)
+...
+musicpal             Marvell 88w8618 / MusicPal (ARM926EJ-S)
+...
+rainier-bmc          IBM Rainier BMC (Cortex-A7)
+raspi0               Raspberry Pi Zero (revision 1.2)
+...
+romulus-bmc          OpenPOWER Romulus BMC (ARM1176)
+...
+supermicro-x11spi-bmc Supermicro X11 SPI BMC (ARM1176)
+supermicrox11-bmc    Supermicro X11 BMC (ARM926EJ-S)
+witherspoon-bmc      OpenPOWER Witherspoon BMC (ARM1176)
+...
+yosemitev2-bmc       Facebook YosemiteV2 BMC (ARM1176)</code></pre>
+
+<p>Note the distinction between QEMU devices, like my <a href="/notes/2026-08-synthetic-pcie/">synthetic PCIe accelerator</a>, and machines. The ARM-powered machines include a Canon PowerShot camera and a Marvell MusicPal music player. Stepping up to BMC machines, Facebook, ByteDance, and Supermicro have custom BMCs for their servers. IBM's Rainier BMC, for POWER10, is a descendant of the servers I worked on.</p>
+
+<p>Let's get to today's belle of the ball: <code>gb200nvl-bmc</code>.</p>
+
+<p><strong>Boot QEMU as the GB200NVL BMC.</strong></p>
+<pre><code>$ build/qemu-system-arm -machine gb200nvl-bmc -nographic</code></pre>
+
+<p>On first run, the CPU fan spins with no output. It's not enough to ask QEMU for the physical BMC machine; we need an OpenBMC firmware image. Cédric Le Goater of Red Hat maintains a repo with many such images: <a href="https://github.com/legoater/qemu-aspeed-boot/tree/master/images">legoater/qemu-aspeed-boot</a>.</p>
+
+<p>The GB200 image is our golden ticket: <a href="https://github.com/legoater/qemu-aspeed-boot/blob/master/images/gb200nvl-bmc/openbmc-20250702182348/obmc-phosphor-image-gb200nvl-obmc-20250702182348.static.mtd.xz">obmc-phosphor-image-gb200nvl-obmc-20250702182348.static.mtd.xz</a></p>
+
+<pre><code>$ build/qemu-system-arm -machine gb200nvl-bmc -nographic \
+    -drive file=/home/jnros/bmc/obmc-phosphor-image-gb200nvl-obmc-20250702182348.static.mtd,format=raw,if=mtd,snapshot=on \
+    -nic user,hostfwd=tcp:127.0.0.1:2222-:22,hostfwd=tcp:127.0.0.1:2443-:443,hostfwd=udp:127.0.0.1:2623-:623</code></pre>
+
+<p>Port forwards: SSH on 2222, HTTPS (Redfish and the web console) on 2443, IPMI on 2623. A flurry of activity, and we're watching Linux boot:</p>
+<pre><code>U-Boot 2019.04 (May 23 2025 - 06:46:26 +0000)
+
+## Loading kernel from FIT Image at 83000000 ...
+   Verifying Hash Integrity ... sha256+ OK
+## Loading ramdisk from FIT Image at 83000000 ...
+   Verifying Hash Integrity ... sha256+ OK
+## Loading fdt from FIT Image at 83000000 ...
+Type:         Flat Device Tree
+   Verifying Hash Integrity ... sha256+ OK
+
+Phosphor OpenBMC (Phosphor OpenBMC Project Reference Distro) nodistro.0.edsbuild9.2025-07-02_09:35_AM gb200nvl-obmc ttyS4
+
+gb200nvl-obmc login:</code></pre>
+
+
+</article>
+
+<footer class="site">
+  <span>© 2026 Linear Group LLC</span>
+  <span><a href="https://github.com/jnros">github</a> · <a href="https://www.linkedin.com/in/johnrose/">linkedin</a> · <a href="mailto:john@lineargp.com">john@lineargp.com</a></span>
+</footer>
+
+</div>
+</body>
+</html>

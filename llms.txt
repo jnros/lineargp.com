@@ -8,6 +8,7 @@
 
 ## Research notes
 
+- [OpenBMC and Redfish on GB200](https://lineargp.com/notes/2026-10-openbmc-redfish/): 2026-10. Out-of-band management for GPU fleets: BMC, OpenBMC, Redfish, MCTP, PLDM, SPDM. Hands-on with the GB200NVL BMC firmware booted in QEMU — Redfish over curl, flash partitions, management daemons.
 - [SACC: A Synthetic PCIe Accelerator](https://lineargp.com/notes/2026-08-synthetic-pcie/): 2026-08. A QEMU device model plus a Linux driver written from a spec, to instrument kernel-bypass submission from both sides — doorbells, BARs, arbitrary PCIe topology. Code: https://github.com/jnros/sacc
 - [RDMA over Ethernet (RoCE) for Disaggregated Inference](https://lineargp.com/notes/2026-07-rdma-roce/): 2026-07. Moving a Qwen KV cache over RDMA/RoCE for disaggregated prefill/decode; transport tradeoffs. Code: https://github.com/jnros/kvwire
 - [GPU Passthrough: VFIO, IOMMU, and Thermal Debug](https://lineargp.com/notes/2026-07-gpu-passthrough/): 2026-07. NVIDIA passthrough to a KVM guest on AMD, headless. Includes a ~30 °C thermal spike traced to GPU driver contention, and its fix.
